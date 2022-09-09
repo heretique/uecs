@@ -22,8 +22,8 @@ export interface Component {
 }
 
 // Type aliases for component storage
-interface TypeStorage<T> { [type: string]: T }
-interface ComponentStorage<T> { [entity: number]: T }
+interface TypeStorage<T> { [type: string]: T} 
+type ComponentStorage<T> = { [entity: Entity]: T } & { entities: Set<Entity>; }
 
 // TODO: store entities in Array<Entity> instead of Set<Entity>
 // if an entity is destroyed, set it in the array to -1
@@ -117,6 +117,7 @@ export class World {
             const component = storage[entity];
             if (component !== undefined && component.free !== undefined) component.free();
             delete storage[entity];
+            storage.entities.delete(entity);
         }
     }
 
@@ -163,7 +164,7 @@ export class World {
     has<T extends Component>(entity: Entity, component: Constructor<T>): boolean {
         const type = component.name;
         const storage = this.components[type];
-        return storage !== undefined && storage[entity] !== undefined;
+        return storage?.entities.has(entity);
     }
 
     /**
@@ -210,8 +211,9 @@ export class World {
         }
 
         const storage = this.components[type];
-        if (storage == null) this.components[type] = {};
+        if (storage == null) this.components[type] = {entities: new Set};
         this.components[type][entity] = component;
+        this.components[type].entities.add(entity);
     }
 
     /**
@@ -247,6 +249,7 @@ export class World {
         if (storage === undefined) return undefined;
         const out = storage[entity] as T | undefined;
         delete storage[entity];
+        storage.entities.delete(entity);
         return out;
     }
 
@@ -286,7 +289,7 @@ export class World {
             // ensure that never-before seen types are registered.
             for (let i = 0; i < types.length; ++i) {
                 if (this.components[types[i].name] === undefined) {
-                    this.components[types[i].name] = {};
+                    this.components[types[i].name] = {entities: new Set};
                 }
             }
             this.views[id] = new ViewImpl(this, types);
@@ -363,19 +366,21 @@ class ViewImpl<T extends Constructor<Component>[]> {
 const keywords = {
     world: "_$WORLD",
     entity: "_$ENTITY",
+    entities: "_$ENTITIES",
     callback: "_$CALLBACK",
     storage: "_$STORAGE",
 };
 function generateView(world: World, types: any[]): ComponentView<any> {
     const length = types.length;
-    let storages = "";
+    let storages = `const ${keywords.storage} = []\n`;
     const storageNames = [];
     for (let i = 0; i < length; ++i) {
         const typeName = types[i].name;
         const name = `${keywords.storage}${typeName}`;
-        storages += `const ${name} = ${keywords.world}.components["${typeName}"];\n`;
+        storages += `const ${name} = ${keywords.world}.components["${typeName}"];\n` + `${keywords.storage}.push(${name});\n`;
         storageNames.push(name);
     }
+
     let variables = "";
     const variableNames = [];
     for (let i = 0; i < length; ++i) {
@@ -394,12 +399,18 @@ function generateView(world: World, types: any[]): ComponentView<any> {
     const fn = ""
         + storages
         + `return function(${keywords.callback}) {\n`
-        + `for (const ${keywords.entity} of ${keywords.world}.entities.values()) {\n`
+        + `let index = 0;\n`
+        + `let min = Math.Infinity;\n`
+        + `for (let i = 0;  i < ${keywords.storage}.length; i++) {\n`
+        + `const length = ${keywords.storage}[i].length;\n`
+        + `if (length < min) { min = length; index = i;}\n`
+        + `}\n`
+        + `for (const ${keywords.entity} of ${keywords.storage}[index].entities.values()) {\n`
         + variables
         + condition
         + `if (${keywords.callback}(${keywords.entity},${join(variableNames, ",")}) === false) return;\n`
         + "}\n"
         + "}";
-
+    // console.log(fn);
     return (new Function(keywords.world, fn))(world) as any;
 }
