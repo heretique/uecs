@@ -218,10 +218,10 @@ describe("behavior", function () {
         // creates six new entities
         world.view(A).each((e) => {
             // base case
-            if (e > 5) return false;
+            // if (e > 5) return false;
             world.create(A);
         });
-        expect(world.size()).toEqual(7);
+        expect(world.size()).toEqual(2);
     });
 });
 
@@ -311,7 +311,7 @@ describe("examples", function () {
         world.view(Fizz, Buzz).each((n) => {
             result.push(n);
         });
-        expect(result).toEqual([0, 15])
+        expect(result).toEqual(["0", "15"])
     });
 
     it(".view example return false", function () {

@@ -363,19 +363,21 @@ class ViewImpl<T extends Constructor<Component>[]> {
 const keywords = {
     world: "_$WORLD",
     entity: "_$ENTITY",
+    entities: "_$ENTITIES",
     callback: "_$CALLBACK",
     storage: "_$STORAGE",
 };
 function generateView(world: World, types: any[]): ComponentView<any> {
     const length = types.length;
-    let storages = "";
+    let storages = `const ${keywords.storage} = []\n`;
     const storageNames = [];
     for (let i = 0; i < length; ++i) {
         const typeName = types[i].name;
         const name = `${keywords.storage}${typeName}`;
-        storages += `const ${name} = ${keywords.world}.components["${typeName}"];\n`;
+        storages += `const ${name} = ${keywords.world}.components["${typeName}"];\n` + `${keywords.storage}.push(${name});\n`;
         storageNames.push(name);
     }
+
     let variables = "";
     const variableNames = [];
     for (let i = 0; i < length; ++i) {
@@ -394,12 +396,19 @@ function generateView(world: World, types: any[]): ComponentView<any> {
     const fn = ""
         + storages
         + `return function(${keywords.callback}) {\n`
-        + `for (const ${keywords.entity} of ${keywords.world}.entities.values()) {\n`
+        + `let index = 0;\n`
+        + `let min = Math.Infinity;\n`
+        + `for (let i = 0;  i < ${keywords.storage}.length; i++) {\n`
+        + `const length = ${keywords.storage}[i].length;\n`
+        + `if (length < min) { min = length; index = i;}\n`
+        + `}\n`
+        + `const ${keywords.entities} = Object.keys(${keywords.storage}[index]);\n`
+        + `for (const ${keywords.entity} of ${keywords.entities}) {\n`
         + variables
         + condition
         + `if (${keywords.callback}(${keywords.entity},${join(variableNames, ",")}) === false) return;\n`
         + "}\n"
         + "}";
-
+    // console.log(fn);
     return (new Function(keywords.world, fn))(world) as any;
 }
