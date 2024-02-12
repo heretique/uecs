@@ -387,7 +387,10 @@ function generateView(world: World, types: any[]): ComponentView<any> {
     entitiesCheck += `let min = Infinity;\n`;
     entitiesCheck += `let storage = undefined;\n`;
     for (let i = 0; i < length; ++i) {
-        entitiesCheck += `if (${storageNames[i]}.size < min) storage = ${storageNames[i]} \n`;
+        entitiesCheck += `if (${storageNames[i]}.size < min) {
+    storage = ${storageNames[i]};
+    min = ${storageNames[i]}.size;
+}\n`;
     }
     entitiesCheck += `if (storage === undefined) return;\n`;
     entitiesCheck += `const ${keywords.entities} = storage.keys();\n`;
