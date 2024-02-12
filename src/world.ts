@@ -7,7 +7,7 @@ import { InstanceTypeTuple, Constructor, join } from "./util";
 export type Entity = number;
 
 /**
- * The Null entity can be used to initialiaze a variable
+ * The Null entity can be used to initialize a variable
  * which is meant to hold an entity without actually using `null`.
  */
 export const Null: Entity = -1;
@@ -22,7 +22,7 @@ export interface Component {
 }
 
 // Type aliases for component storage
-interface TypeStorage<T> { [type: string]: T }
+interface TypeStorage<T> { [type: string]: {components: T, count: number} }
 interface ComponentStorage<T> { [entity: number]: T }
 
 // TODO: store entities in Array<Entity> instead of Set<Entity>
@@ -114,9 +114,12 @@ export class World {
         this.entities.delete(entity);
         for (const key in this.components) {
             const storage = this.components[key];
-            const component = storage[entity];
-            if (component !== undefined && component.free !== undefined) component.free();
-            delete storage[entity];
+            const component = storage.components[entity];
+            if (component !== undefined) {
+                storage.count--;
+                if (component.free !== undefined) component.free();
+            } 
+            delete storage.components[entity];
         }
     }
 
@@ -143,7 +146,7 @@ export class World {
         const type = component.name;
         const storage = this.components[type];
         if (storage === undefined) return undefined;
-        return storage[entity] as T | undefined;
+        return storage.components[entity] as T | undefined;
     }
 
     /**
@@ -163,7 +166,7 @@ export class World {
     has<T extends Component>(entity: Entity, component: Constructor<T>): boolean {
         const type = component.name;
         const storage = this.components[type];
-        return storage !== undefined && storage[entity] !== undefined;
+        return storage !== undefined && storage.components[entity] !== undefined;
     }
 
     /**
@@ -209,9 +212,15 @@ export class World {
             throw new Error(`Cannot set component "${type}" for dead entity ID ${entity}`);
         }
 
-        const storage = this.components[type];
-        if (storage == null) this.components[type] = {};
-        this.components[type][entity] = component;
+        let storage = this.components[type];
+        if (storage === undefined) {
+            this.components[type] = {components: {}, count: 0};
+            storage = this.components[type];
+        } 
+        if (storage.components[entity] === undefined) {
+            storage.count++;
+        }
+        storage.components[entity] = component;
     }
 
     /**
@@ -245,8 +254,11 @@ export class World {
         const type = component.name;
         const storage = this.components[type];
         if (storage === undefined) return undefined;
-        const out = storage[entity] as T | undefined;
-        delete storage[entity];
+        const out = storage.components[entity] as T | undefined;
+        if (out !== undefined) {
+            storage.count--
+        }
+        delete storage.components[entity];
         return out;
     }
 
@@ -286,7 +298,7 @@ export class World {
             // ensure that never-before seen types are registered.
             for (let i = 0; i < types.length; ++i) {
                 if (this.components[types[i].name] === undefined) {
-                    this.components[types[i].name] = {};
+                    this.components[types[i].name] = {components: {}, count:0};
                 }
             }
             this.views[id] = new ViewImpl(this, types);
@@ -363,25 +375,46 @@ class ViewImpl<T extends Constructor<Component>[]> {
 const keywords = {
     world: "_$WORLD",
     entity: "_$ENTITY",
+    entities: "_$ENTITIES",
     callback: "_$CALLBACK",
     storage: "_$STORAGE",
+    components: "_$COMPONENTS"
 };
+
+
 function generateView(world: World, types: any[]): ComponentView<any> {
     const length = types.length;
     let storages = "";
     const storageNames = [];
+    const componentNames = [];
     for (let i = 0; i < length; ++i) {
         const typeName = types[i].name;
         const name = `${keywords.storage}${typeName}`;
         storages += `const ${name} = ${keywords.world}.components["${typeName}"];\n`;
         storageNames.push(name);
+        const componentName = `${name}Components`;
+        storages += `const ${componentName} = ${name}.components;\n`;
+        componentNames.push(componentName);
     }
+
+    let entitiesCheck = "";
+    entitiesCheck += `let min = Infinity;\n`;
+    entitiesCheck += `let storage = undefined;\n`;
+    for (let i = 0; i < length; ++i) {
+        entitiesCheck += `if (${storageNames[i]}.count < min) {
+    storage = ${storageNames[i]};
+    min = ${storageNames[i]}.count;
+}\n`;
+    }
+    entitiesCheck += `if (storage === undefined) return;\n`;
+    entitiesCheck += `const ${keywords.entities} = Object.keys(storage.components);\n`;
+
     let variables = "";
     const variableNames = [];
     for (let i = 0; i < length; ++i) {
         const typeName = types[i].name;
         const name = `${typeName}${i}`;
-        variables += `const ${name} = ${storageNames[i]}[${keywords.entity}];\n`;
+        variables += `const ${name} = ${componentNames[i]}[${keywords.entity}];\n`;
         variableNames.push(name);
     }
     let condition = "if (";
@@ -394,12 +427,14 @@ function generateView(world: World, types: any[]): ComponentView<any> {
     const fn = ""
         + storages
         + `return function(${keywords.callback}) {\n`
-        + `for (const ${keywords.entity} of ${keywords.world}.entities.values()) {\n`
+        + entitiesCheck
+        + `for (const ${keywords.entity} of ${keywords.entities}) {\n`
         + variables
         + condition
-        + `if (${keywords.callback}(${keywords.entity},${join(variableNames, ",")}) === false) return;\n`
+        + `if (${keywords.callback}(parseInt(${keywords.entity}),${join(variableNames, ",")}) === false) return;\n`
         + "}\n"
         + "}";
 
+        console.log(fn);
     return (new Function(keywords.world, fn))(world) as any;
 }
