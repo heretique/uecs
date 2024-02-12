@@ -372,15 +372,26 @@ const keywords = {
 };
 function generateView(world: World, types: any[]): ComponentView<any> {
     const length = types.length;
-    let storages = `const ${keywords.storage} = []\n`;
+    let storages = "";
     const storageNames = [];
     for (let i = 0; i < length; ++i) {
         const typeName = types[i].name;
         const name = `${keywords.storage}${typeName}`;
-        storages += `const ${name} = ${keywords.world}.components["${typeName}"];\n` + `${keywords.storage}.push(${name});\n`;
+        storages += `const ${name} = ${keywords.world}.components["${typeName}"];\n`;
         storageNames.push(name);
     }
 
+    let entitiesCheck = "";
+    entitiesCheck += `let min = Infinity;\n`;
+    entitiesCheck += `let storage = undefined;\n`;
+    for (let i = 0; i < length; ++i) {
+        entitiesCheck += `if (${storageNames[i]}.entities.size < min) {
+    storage = ${storageNames[i]};
+    min = ${storageNames[i]}.entities.size;
+}\n`;
+    }
+    entitiesCheck += `if (storage === undefined) return;\n`;
+    entitiesCheck += `const ${keywords.entities} = storage.entities.values();\n`;
     let variables = "";
     const variableNames = [];
     for (let i = 0; i < length; ++i) {
@@ -399,18 +410,13 @@ function generateView(world: World, types: any[]): ComponentView<any> {
     const fn = ""
         + storages
         + `return function(${keywords.callback}) {\n`
-        + `let index = 0;\n`
-        + `let min = Math.Infinity;\n`
-        + `for (let i = 0;  i < ${keywords.storage}.length; i++) {\n`
-        + `const length = ${keywords.storage}[i].length;\n`
-        + `if (length < min) { min = length; index = i;}\n`
-        + `}\n`
-        + `for (const ${keywords.entity} of ${keywords.storage}[index].entities.values()) {\n`
+        + entitiesCheck
+        + `for (const ${keywords.entity} of ${keywords.entities}) {\n`
         + variables
         + condition
         + `if (${keywords.callback}(${keywords.entity},${join(variableNames, ",")}) === false) return;\n`
         + "}\n"
         + "}";
-    // console.log(fn);
+
     return (new Function(keywords.world, fn))(world) as any;
 }
