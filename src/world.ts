@@ -372,6 +372,7 @@ class ViewImpl<T extends Constructor<Component>[]> {
 const keywords = {
   world: "_$WORLD",
   entity: "_$ENTITY",
+  entities: "_$ENTITIES",
   callback: "_$CALLBACK",
   storage: "_$STORAGE",
 };
@@ -385,6 +386,18 @@ function generateView(world: World, types: any[]): ComponentView<any> {
     storages += `const ${name} = ${keywords.world}.componentsStorage["${typeName}"];\n`;
     storageNames.push(name);
   }
+
+  let entitiesCheck = "";
+  entitiesCheck += `let min = Infinity;\n`;
+  entitiesCheck += `let storage = undefined;\n`;
+  for (let i = 0; i < length; ++i) {
+      entitiesCheck += `if (${storageNames[i]}.components.length < min) {
+  storage = ${storageNames[i]};
+  min = ${storageNames[i]}.components.length;
+}\n`;
+  }
+  entitiesCheck += `if (storage === undefined) return;\n`;
+  entitiesCheck += `const ${keywords.entities} = storage.sparseSet.getValues();\n`;
 
   let condition = "";
   condition += "if (";
@@ -409,7 +422,8 @@ function generateView(world: World, types: any[]): ComponentView<any> {
     "" +
     storages +
     `return function(${keywords.callback}) {\n` +
-    `for (const ${keywords.entity} of ${keywords.world}.entities.getValues()) {\n` +
+    entitiesCheck +
+    `for (const ${keywords.entity} of ${keywords.entities}) {\n` +
     condition +
     variables +
     `if (${keywords.callback}(${keywords.entity},${join(
