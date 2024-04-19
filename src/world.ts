@@ -43,7 +43,7 @@ interface ComponentStorage<T> {
  */
 export class World {
   private ids = new IdPool();
-  private entities = new SparseSet(2048);
+  private entities = new SparseSet(400096);
   private componentsStorage: TypeStorage<ComponentStorage<Component>> = {};
   private views: { [id: string]: View<any> } = {};
 
@@ -83,6 +83,7 @@ export class World {
    * ```
    */
   destroy(entity: Entity) {
+    if (!this.entities.has(entity)) return;
     this.entities.remove(entity);
     this.ids.release(entity);
     for (const key in this.componentsStorage) {
@@ -198,7 +199,7 @@ export class World {
     if (storage === undefined)
       storage = {
         components: [],
-        sparseSet: new SparseSet(2048),
+        sparseSet: new SparseSet(400096),
       };
     this.componentsStorage[type] = storage;
     const index = storage.sparseSet.add(entity);
@@ -288,7 +289,7 @@ export class World {
         if (this.componentsStorage[types[i].name] === undefined) {
           this.componentsStorage[types[i].name] = {
             components: [],
-            sparseSet: new SparseSet(2048),
+            sparseSet: new SparseSet(400096),
           };
         }
       }
@@ -408,7 +409,7 @@ function generateView(world: World, types: any[]): ComponentView<any> {
     "" +
     storages +
     `return function(${keywords.callback}) {\n` +
-    `for (const ${keywords.entity} of ${keywords.world}.entities) {\n` +
+    `for (const ${keywords.entity} of ${keywords.world}.entities.getValues()) {\n` +
     condition +
     variables +
     `if (${keywords.callback}(${keywords.entity},${join(

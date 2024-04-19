@@ -3,7 +3,7 @@ export class SparseSet {
   private sparse: Int32Array;
   private size: number = 0;
   private capacity: number;
-  private maxCapacity: number = 1_000_000;
+  private maxCapacity: number = 550_000;
 
   constructor(capacity: number) {
     this.capacity = capacity;
@@ -45,7 +45,7 @@ export class SparseSet {
   }
 
   remove(value: number): void {
-    if (this.size == 0) {
+    if (this.size === 0) {
       return;
     }
 

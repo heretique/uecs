@@ -28,4 +28,13 @@ describe("IdPool", function () {
     expect(pool.reserve()).toEqual(7);
     expect(pool.reserve()).toEqual(9);
   });
+
+  it("reserves 100000 ids", function () {
+    const pool = new IdPool();
+    const ids = [];
+    for (let i = 0; i < 100_000; i++) {
+      ids.push(pool.reserve());
+    }
+    expect(ids[100_000 - 1]).toEqual(100_000);
+  });
 });
